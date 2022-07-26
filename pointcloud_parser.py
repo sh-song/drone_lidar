@@ -134,8 +134,9 @@ class PCParser:
                                                 self.voxelized_data[indice][2],
                                                 self.rgb_to_float([255,0,0])])
 
-            cluster_cloud = pcl.PointCloud_PointXYZRGB()
-            cluster_cloud.from_list(cluster_with_color)
+            # cluster_cloud = pcl.PointCloud_PointXYZRGB()
+            # cluster_cloud.from_list(cluster_with_color)
+            cluster_cloud = np.array(cluster_with_color)
             cluster_cloud_list.append(cluster_cloud)
 
         self.cluster_cloud_list = cluster_cloud_list
