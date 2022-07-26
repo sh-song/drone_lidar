@@ -20,8 +20,8 @@ class PCParser:
         print('init.....')
         rospy.init_node('parser', anonymous=False)
         rospy.Subscriber("/velodyne_points", PointCloud2, self.ros_to_pcl)
-        self.point_pub = rospy.Publisher("/test_point", PointCloud, queue_size=1)
-        self.temp_pub = rospy.Publisher("/cluster", PointCloud, queue_size=1)
+        self.point_pub = rospy.Publisher("/processed_cloud", PointCloud, queue_size=1)
+        self.cluster_pub = rospy.Publisher("/cluster", PointCloud, queue_size=1)
 
         self.pcl_data = pcl.PointCloud()
         self.voxelized_data = None
@@ -177,7 +177,7 @@ class PCParser:
         
         channel.values = color
         out.channels.append(channel)
-        self.temp_pub.publish(out)        
+        self.cluster_pub.publish(out)        
 
 
     def cluster_filling(self):
@@ -194,8 +194,8 @@ class PCParser:
             self.voxelize(leaf_size=1)
             self.euclidean_clustering()
             self.cluster_filling()
-            #self.visualize_cluster()
-            #self.visualize("roi")
+            self.visualize_cluster()
+            self.visualize("roi")
                 
 
 

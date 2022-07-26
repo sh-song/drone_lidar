@@ -1,0 +1,1 @@
+rviz -d cluster.rviz
