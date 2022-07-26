@@ -12,7 +12,7 @@ from sig_int_handler import Activate_Signal_Interrupt_Handler
 import struct
 from random import randint
 import pcl
-
+from scipy.spatial import ConvexHull
 
 
 class PCParser:
@@ -29,7 +29,12 @@ class PCParser:
         
         self.cluster_number = 0
         self.cluster_cloud_list = None
-    
+        self.MAP_SIZE = 8.0 #m, square
+        self.VOXEL_SIZE = 0.5 #m, square
+        self.DRONE_SIZE = 0.5 #m, square
+        self.GRIDS_PER_EDGE = int(self.MAP_SIZE // self.VOXEL_SIZE)
+        self.grid_map = np.zeros([self.GRIDS_PER_EDGE, self.GRIDS_PER_EDGE])
+
     def ros_to_pcl(self, msg): #in sub thread
         points_list = []
         for data in pc2.read_points(msg, skip_nans=True):
@@ -56,7 +61,7 @@ class PCParser:
         return passthrough_filter.filter()
 
 
-    def drone_roi(self,roi_min=0.5, roi_max=15):
+    def roi_cropping(self,roi_min=0.5, roi_max=15):
     
         passthrough_filter = self.pcl_data.make_passthrough_filter()
         
@@ -119,7 +124,7 @@ class PCParser:
         ec = self.voxelized_data.make_EuclideanClusterExtraction()
         ec.set_ClusterTolerance(1)
         ec.set_MinClusterSize(1)
-        ec.set_MaxClusterSize(20000)
+        ec.set_MaxClusterSize(10)
         ec.set_SearchMethod(tree)
         cluster_indices = ec.Extract()
         #cluster_color = self.get_color_list(len(cluster_indices))
@@ -165,34 +170,36 @@ class PCParser:
         channel.name = "intensity"
         #channel.name = "rgb"
         color = []
-    
         for i, cluster in enumerate(self.cluster_cloud_list):
-
+            color_constant = 1/self.cluster_number 
             for p in cluster:
-                out.points.append(Point32(p[0], p[1], p[2]))
-                color.append(i*(1/self.cluster_number))
-                #color.append(self.rgb_to_float([255, 0, 255]))
-                #color.append(self.rgb_to_float([255-int((i+0.5)*(225/self.cluster_number)),112, int((i+0.5)*(225/self.cluster_number))]))
+                out.points.append(Point32(p[0], p[1], 0))
+                # out.points.append(Point32(p[0], p[1], p[2]))
+                color.append(i*color_constant)
 
-
-        
         channel.values = color
         out.channels.append(channel)
         self.cluster_pub.publish(out)        
 
-
     def cluster_filling(self):
+        new_grid_map = np.zeros([self.GRIDS_PER_EDGE, self.GRIDS_PER_EDGE])
         for i, cluster in enumerate(self.cluster_cloud_list):
-            for p in cluster:
-                print(p)
-                #out.points.append(Point32(p[0], p[1], p[2]))
-                # color.append(i*(1/self.cluster_number))
- 
+            hull_cluster = cluster[:, 0:2]
+            print('cluster', cluster[:, 0:2].shape)
+            print('hull', hull_cluster.shape)
+            print('--------------')
+            for p in hull_cluster:
+                # print(int(p[0]/self.VOXEL_SIZE), int(p[1]/self.VOXEL_SIZE))
+                new_grid_map[int(p[0]/self.VOXEL_SIZE), int(p[1]/self.VOXEL_SIZE)] = 1
+
+        print(new_grid_map)
+
+        # self.filled_cluster_cloud_list = filled_cluster_cloud_list
     def run(self):
         while True:
 
-            self.drone_roi(roi_min = 0.5, roi_max = 15)
-            self.voxelize(leaf_size=1)
+            self.roi_cropping(roi_min = self.DRONE_SIZE, roi_max = self.MAP_SIZE)
+            self.voxelize(self.VOXEL_SIZE)
             self.euclidean_clustering()
             self.cluster_filling()
             self.visualize_cluster()
