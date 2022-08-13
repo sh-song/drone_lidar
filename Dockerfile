@@ -26,7 +26,7 @@ RUN add-apt-repository ppa:sweptlaser/python3-pcl
 RUN apt update
 RUN apt install -y python3-pcl
 
-
+RUN apt install -y ros-melodic-rosbridge-server
 RUN mkdir /workspace
 	
 WORKDIR /workspace
