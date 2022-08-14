@@ -10,19 +10,22 @@ from sensor_msgs import point_cloud2 as pc2
 from sensor_msgs.msg import PointCloud
 from geometry_msgs.msg import Point32
 from sensor_msgs.msg import ChannelFloat32
-from sig_int_handler import Activate_Signal_Interrupt_Handler
 import struct
 import argparse
-from random import randint
 import pcl
 import threading
 from scipy.spatial import ConvexHull
-from simul_lidar import UDP_LIDAR_Parser
+from lib.cluster_tracker import ClusterTracker
+from lib.sig_int_handler import Activate_Signal_Interrupt_Handler
 np.set_printoptions(threshold=sys.maxsize)
+
+class Shared:
+    def __init__(self):
+        self.current_means = None
 
 class PCParser:
     def __init__(self, args):
-        print('init.....')
+        print('init..... if using simulator, add "--lidar simul" argument')
         rospy.init_node('parser', anonymous=False)
         if args.lidar == 'simul':
             rospy.Subscriber("/lidar3D", PointCloud2, self.ros_to_pcl)
@@ -32,16 +35,24 @@ class PCParser:
         self.point_pub = rospy.Publisher("/processed_cloud", PointCloud, queue_size=1)
         self.cluster_pub = rospy.Publisher("/cluster", PointCloud, queue_size=1)
 
+        self.shared = Shared()
         self.pcl_data = pcl.PointCloud()
         self.new_pcl_data = pcl.PointCloud()
         self.voxelized_data = None
         self.roi_cropped_data = pcl.PointCloud()
         
-        self.cluster_number = 0
         self.cluster_cloud_list = None
+        self.tracker = ClusterTracker(self.shared, queue_size=15)
+
         self.MAP_SIZE = 50.0 #m, square
         self.VOXEL_SIZE = 0.2 #m, square
         self.EGO_SIZE = 0.5 #m, square
+        self.CLUSTER_TOLERANCE = 1 # in meters
+        self.CLUSTER_MIN_SIZE = 10 #min number of points
+        self.CLUSTER_MAX_SIZE = 500 #max number of points      
+        self.VERTICAL_UPPER_ROI = 5 #m
+        self.VERTICAL_LOWER_ROI = -5 #m
+
         self.GRIDS_PER_EDGE = int(self.MAP_SIZE // self.VOXEL_SIZE)
         self.grid_map = np.zeros([self.GRIDS_PER_EDGE, self.GRIDS_PER_EDGE])
 
@@ -135,15 +146,16 @@ class PCParser:
         tree = self.voxelized_data.make_kdtree()
         # Create Cluster-Mask Point Cloud to visualize each cluster separately
         ec = self.voxelized_data.make_EuclideanClusterExtraction()
-        ec.set_ClusterTolerance(0.5) # in meters
-        ec.set_MinClusterSize(10) #min number of points
-        ec.set_MaxClusterSize(200) #max number of points
+        ec.set_ClusterTolerance(self.CLUSTER_TOLERANCE) # in meters
+
+        ec.set_MinClusterSize(self.CLUSTER_MIN_SIZE) #min number of points
+        ec.set_MaxClusterSize(self.CLUSTER_MAX_SIZE) #max number of points
         ec.set_SearchMethod(tree)
         cluster_indices = ec.Extract()
         #cluster_color = self.get_color_list(len(cluster_indices))
         cluster_cloud_list = []
-        self.cluster_number = len(cluster_indices)
-        # print('#ofclusters', len(cluster_indices))
+        current_means = []
+
         for j, indices in enumerate(cluster_indices): #jth cluster
             cluster_with_color = []
             for i, indice in enumerate(indices):
@@ -152,13 +164,16 @@ class PCParser:
                                                 self.voxelized_data[indice][2],
                                                 self.rgb_to_float([255,0,0])])
 
-            # cluster_cloud = pcl.PointCloud_PointXYZRGB()
-            # cluster_cloud.from_list(cluster_with_color)
             cluster_cloud = np.array(cluster_with_color)
-            cluster_cloud_list.append(cluster_cloud)
 
-        print('eee', self.cluster_number)
+            mean = np.mean(cluster_cloud, axis=0)
+            if (mean[2] < self.VERTICAL_UPPER_ROI) \
+                and (mean[2] > self.VERTICAL_LOWER_ROI):
+                cluster_cloud_list.append(cluster_cloud)
+                current_means.append(mean[0:3])
         self.cluster_cloud_list = cluster_cloud_list
+        self.shared.current_means = current_means
+
 
     def visualize(self, target, data=None):
         if target=="raw":
@@ -180,6 +195,7 @@ class PCParser:
         channel = ChannelFloat32
         channel.name = "intensity"
         color = []
+        self.cluster_number = len(self.cluster_cloud_list)
         for i, cluster in enumerate(self.cluster_cloud_list):
             color_constant = 1/self.cluster_number 
             for p in cluster:
@@ -187,7 +203,6 @@ class PCParser:
 
                 # out.points.append(Point32(p[0], p[1], p[2]))
                 color.append(i*color_constant)
-            print('----------', cluster)
         channel.values = color
         out.channels.append(channel)
         self.cluster_pub.publish(out)        
@@ -205,13 +220,13 @@ class PCParser:
 
         print(new_grid_map)
 
-        # self.filled_cluster_cloud_list = filled_cluster_cloud_list
     def run(self):
         while True:
             self.pcl_data = self.new_pcl_data
             self.roi_cropping(roi_min = self.EGO_SIZE, roi_max = self.MAP_SIZE)
             self.voxelize(self.VOXEL_SIZE)
             self.euclidean_clustering()
+            self.tracker.run()
             # self.cluster_filling()
             self.visualize_cluster()
             self.visualize("voxel")
