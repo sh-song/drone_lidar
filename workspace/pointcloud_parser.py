@@ -1,4 +1,5 @@
 from ast import AsyncFunctionDef
+import os,json
 from csv import reader
 from pydoc import cli
 import rospy
@@ -24,9 +25,11 @@ class Shared:
         self.current_means = None
 
 class PCParser:
-    def __init__(self, args):
+    def __init__(self, args, params):
         print('init..... if using simulator, add "--lidar simul" argument')
         rospy.init_node('parser', anonymous=False)
+        self.params = params
+
         if args.lidar == 'simul':
             rospy.Subscriber("/lidar3D", PointCloud2, self.ros_to_pcl)
         else:
@@ -44,16 +47,7 @@ class PCParser:
         self.cluster_cloud_list = None
         self.tracker = ClusterTracker(self.shared, queue_size=15)
 
-        self.MAP_SIZE = 50.0 #m, square
-        self.VOXEL_SIZE = 0.2 #m, square
-        self.EGO_SIZE = 0.5 #m, square
-        self.CLUSTER_TOLERANCE = 1 # in meters
-        self.CLUSTER_MIN_SIZE = 10 #min number of points
-        self.CLUSTER_MAX_SIZE = 500 #max number of points      
-        self.VERTICAL_UPPER_ROI = 5 #m
-        self.VERTICAL_LOWER_ROI = -5 #m
-
-        self.GRIDS_PER_EDGE = int(self.MAP_SIZE // self.VOXEL_SIZE)
+        self.GRIDS_PER_EDGE = int(self.params['MAP_SIZE'] // self.params['VOXEL_SIZE'])
         self.grid_map = np.zeros([self.GRIDS_PER_EDGE, self.GRIDS_PER_EDGE])
 
  
@@ -81,7 +75,9 @@ class PCParser:
     def roi_cropping(self,roi_min=0.5, roi_max=15):
     
         passthrough_filter = self.pcl_data.make_passthrough_filter()
-        
+        vertical_roi = self.do_passthrough(passthrough_filter, "z", self.params['VERTICAL_LOWER_ROI'], self.params['VERTICAL_UPPER_ROI'], is_negative=False)
+
+        passthrough_filter = vertical_roi.make_passthrough_filter()
         front_roi = self.do_passthrough(passthrough_filter, "y", roi_min, roi_max, is_negative=False)
         rear_roi = self.do_passthrough(passthrough_filter, "y", roi_min, roi_max, is_negative=True)
         
@@ -99,7 +95,6 @@ class PCParser:
 
         passthrough_filter = rear_roi.make_passthrough_filter()
         rear_roi = self.do_passthrough(passthrough_filter, "x", -roi_max, roi_max, is_negative=False)
-        
 
 
         if front_roi.to_array().size == 0:
@@ -129,6 +124,8 @@ class PCParser:
         vox = self.roi_cropped_data.make_voxel_grid_filter()
         vox.set_leaf_size(leaf_size, leaf_size, leaf_size) # The bigger the leaf size the less information retained
         self.voxelized_data = vox.filter()
+        print(self.roi_cropped_data.size)
+        print(self.voxelized_data.size)
 
     def rgb_to_float(self, color):
         hex_r = (0xff & color[0]) << 16
@@ -146,12 +143,13 @@ class PCParser:
         tree = self.voxelized_data.make_kdtree()
         # Create Cluster-Mask Point Cloud to visualize each cluster separately
         ec = self.voxelized_data.make_EuclideanClusterExtraction()
-        ec.set_ClusterTolerance(self.CLUSTER_TOLERANCE) # in meters
 
-        ec.set_MinClusterSize(self.CLUSTER_MIN_SIZE) #min number of points
-        ec.set_MaxClusterSize(self.CLUSTER_MAX_SIZE) #max number of points
+        ec.set_ClusterTolerance(self.params['CLUSTER_TOLERANCE'])
+        ec.set_MinClusterSize(self.params['CLUSTER_MIN_SIZE']) #min number of points
+        ec.set_MaxClusterSize(self.params['CLUSTER_MAX_SIZE']) #max number of points
         ec.set_SearchMethod(tree)
         cluster_indices = ec.Extract()
+        # print(cluster_indices)
         #cluster_color = self.get_color_list(len(cluster_indices))
         cluster_cloud_list = []
         current_means = []
@@ -167,10 +165,9 @@ class PCParser:
             cluster_cloud = np.array(cluster_with_color)
 
             mean = np.mean(cluster_cloud, axis=0)
-            if (mean[2] < self.VERTICAL_UPPER_ROI) \
-                and (mean[2] > self.VERTICAL_LOWER_ROI):
-                cluster_cloud_list.append(cluster_cloud)
-                current_means.append(mean[0:3])
+
+            cluster_cloud_list.append(cluster_cloud)
+            current_means.append(mean[0:3])
         self.cluster_cloud_list = cluster_cloud_list
         self.shared.current_means = current_means
 
@@ -215,18 +212,19 @@ class PCParser:
             print('hull', hull_cluster.shape)
             print('--------------')
             for p in hull_cluster:
-                # print(int(p[0]/self.VOXEL_SIZE), int(p[1]/self.VOXEL_SIZE))
-                new_grid_map[int(p[0]/self.VOXEL_SIZE), int(p[1]/self.VOXEL_SIZE)] = 1
+                # print(int(p[0]/self.params['VOXEL_SIZE'])L_SIZE']
+                # new_grid_map[int(p[0]/self.params['VOXEL_SIZE'])'])
+                pass
 
         print(new_grid_map)
 
     def run(self):
         while True:
             self.pcl_data = self.new_pcl_data
-            self.roi_cropping(roi_min = self.EGO_SIZE, roi_max = self.MAP_SIZE)
-            self.voxelize(self.VOXEL_SIZE)
+            self.roi_cropping(roi_min = self.params['EGO_SIZE'], roi_max = self.params['MAP_SIZE'])
+            self.voxelize(self.params['VOXEL_SIZE'])
             self.euclidean_clustering()
-            self.tracker.run()
+            # self.tracker.run()
             # self.cluster_filling()
             self.visualize_cluster()
             self.visualize("voxel")
@@ -237,15 +235,34 @@ if __name__ == "__main__":
     Activate_Signal_Interrupt_Handler()
 
     argparser = argparse.ArgumentParser(
-        description="DOK3"
+        description="ask shs"
     )
+
     argparser.add_argument(
         '--lidar',
         default='real',
         help='simul or real'
     )
 
-    args = argparser.parse_args()
-    pp = PCParser(args)
+    argparser.add_argument(
+        '--platform',
+        default='gigacha',
+        help='gigacha or dok3'
+    )
+
+    path = os.path.dirname( os.path.abspath( __file__ ) )
+
+    with open(os.path.join(path,("params.json")),'r') as fp :
+        params = json.load(fp)
     
+    args = argparser.parse_args()
+    if args.platform == "gigacha":
+        params = params['gigacha']
+        print('platform: gigacha')
+
+    elif args.platform == "dok3":
+        params = params['dok3']
+        print('platform: dok3')
+
+    pp = PCParser(args, params)
     pp.run()
