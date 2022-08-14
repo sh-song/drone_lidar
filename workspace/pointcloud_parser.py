@@ -45,7 +45,7 @@ class PCParser:
         self.roi_cropped_data = pcl.PointCloud()
         
         self.cluster_cloud_list = None
-        self.tracker = ClusterTracker(self.shared, queue_size=15)
+        self.tracker = ClusterTracker(self.params['tracker'], self.shared)
 
         self.GRIDS_PER_EDGE = int(self.params['MAP_SIZE'] // self.params['VOXEL_SIZE'])
         self.grid_map = np.zeros([self.GRIDS_PER_EDGE, self.GRIDS_PER_EDGE])
@@ -124,8 +124,8 @@ class PCParser:
         vox = self.roi_cropped_data.make_voxel_grid_filter()
         vox.set_leaf_size(leaf_size, leaf_size, leaf_size) # The bigger the leaf size the less information retained
         self.voxelized_data = vox.filter()
-        print(self.roi_cropped_data.size)
-        print(self.voxelized_data.size)
+        # print(self.roi_cropped_data.size)
+        # print(self.voxelized_data.size)
 
     def rgb_to_float(self, color):
         hex_r = (0xff & color[0]) << 16
@@ -224,7 +224,7 @@ class PCParser:
             self.roi_cropping(roi_min = self.params['EGO_SIZE'], roi_max = self.params['MAP_SIZE'])
             self.voxelize(self.params['VOXEL_SIZE'])
             self.euclidean_clustering()
-            # self.tracker.run()
+            self.tracker.run()
             # self.cluster_filling()
             self.visualize_cluster()
             self.visualize("voxel")
