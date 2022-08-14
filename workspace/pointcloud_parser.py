@@ -16,8 +16,8 @@ import argparse
 import pcl
 import threading
 from scipy.spatial import ConvexHull
-from lib.cluster_tracker import ClusterTracker
-from lib.sig_int_handler import Activate_Signal_Interrupt_Handler
+from libs.cluster_tracker import ClusterTracker
+from libs.sig_int_handler import Activate_Signal_Interrupt_Handler
 np.set_printoptions(threshold=sys.maxsize)
 
 class Shared:
