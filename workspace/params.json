@@ -16,7 +16,8 @@
                 "QUEUE_SIZE" : 15,
                 "CLUSTER_TOLERANCE" : 0.5,
                 "CLUSTER_MIN_SIZE" : 2,
-                "CLUSTER_MAX_SIZE" : 15      
+                "CLUSTER_MAX_SIZE" : 15,
+                "MAX_GROUP_LIFE" : 4000      
             }
  	    },
 
