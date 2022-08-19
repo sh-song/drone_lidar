@@ -4,4 +4,4 @@ docker run -it \
 -e DISPLAY=unix$DISPLAY \
 --net=host \
 --privileged \
-drone_lidar 
+obs_tracker 
