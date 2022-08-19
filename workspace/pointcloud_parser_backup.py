@@ -2,7 +2,6 @@ from ast import AsyncFunctionDef
 import os,json
 from csv import reader
 from pydoc import cli
-from types import DynamicClassAttribute
 import rospy
 import numpy as np
 import sys
@@ -18,8 +17,6 @@ import pcl
 import threading
 from scipy.spatial import ConvexHull
 from libs.cluster_tracker import ClusterTracker
-from libs.i_am_map        import Map
-# from libs.visualize_map   import VisualizeMap
 from libs.sig_int_handler import Activate_Signal_Interrupt_Handler
 np.set_printoptions(threshold=sys.maxsize)
 
@@ -40,7 +37,7 @@ class PCParser:
         
         self.point_pub = rospy.Publisher("/processed_cloud", PointCloud, queue_size=1)
         self.cluster_pub = rospy.Publisher("/cluster", PointCloud, queue_size=1)
-       
+
         self.shared = Shared()
         self.pcl_data = pcl.PointCloud()
         self.new_pcl_data = pcl.PointCloud()
@@ -52,12 +49,6 @@ class PCParser:
 
         self.GRIDS_PER_EDGE = int(self.params['MAP_SIZE'] // self.params['VOXEL_SIZE'])
         self.grid_map = np.zeros([self.GRIDS_PER_EDGE, self.GRIDS_PER_EDGE])
-
-        ## Our LocalMap
-        self.map = Map()
-
-        ## Visualize LocalMap
-        # self.visualizer = VisualizeMap
 
  
     def ros_to_pcl(self, msg): #in sub thread
@@ -89,44 +80,21 @@ class PCParser:
         passthrough_filter = vertical_roi.make_passthrough_filter()
         front_roi = self.do_passthrough(passthrough_filter, "y", roi_min, roi_max, is_negative=False)
         rear_roi = self.do_passthrough(passthrough_filter, "y", roi_min, roi_max, is_negative=True)
-
-        left_roi = self.do_passthrough(passthrough_filter, "x", 0, 0, is_negative=True)
+        
+        left_roi = self.do_passthrough(passthrough_filter, "x", roi_min, roi_max, is_negative=True)
         right_roi = self.do_passthrough(passthrough_filter, "x", roi_min, roi_max, is_negative=False)
 
-        # passthrough_filter = left_roi.make_passthrough_filter()
-        # left_roi = self.do_passthrough(passthrough_filter, "y", -roi_min, roi_min, is_negative=False)
+        passthrough_filter = left_roi.make_passthrough_filter()
+        left_roi = self.do_passthrough(passthrough_filter, "y", -roi_min, roi_min, is_negative=False)
 
         passthrough_filter = right_roi.make_passthrough_filter()
-        right_roi = self.do_passthrough(passthrough_filter, "y", -roi_max, roi_max, is_negative=False)
+        right_roi = self.do_passthrough(passthrough_filter, "y", -roi_min, roi_min, is_negative=False)
 
         passthrough_filter = front_roi.make_passthrough_filter()
-        front_roi = self.do_passthrough(passthrough_filter, "x", 0, roi_min, is_negative=False)
+        front_roi = self.do_passthrough(passthrough_filter, "x", -roi_max, roi_max, is_negative=False)
 
         passthrough_filter = rear_roi.make_passthrough_filter()
-        rear_roi = self.do_passthrough(passthrough_filter, "x", 0, roi_min, is_negative=False)
-
-        # ## original code
-        # passthrough_filter = self.pcl_data.make_passthrough_filter()
-        # vertical_roi = self.do_passthrough(passthrough_filter, "z", self.params['VERTICAL_LOWER_ROI'], self.params['VERTICAL_UPPER_ROI'], is_negative=False)
-
-        # passthrough_filter = vertical_roi.make_passthrough_filter()
-        # front_roi = self.do_passthrough(passthrough_filter, "y", roi_min, roi_max, is_negative=False)
-        # rear_roi = self.do_passthrough(passthrough_filter, "y", roi_min, roi_max, is_negative=True)
-
-        # left_roi = self.do_passthrough(passthrough_filter, "x", roi_min, roi_max, is_negative=True)
-        # right_roi = self.do_passthrough(passthrough_filter, "x", roi_min, roi_max, is_negative=False)
-
-        # passthrough_filter = left_roi.make_passthrough_filter()
-        # left_roi = self.do_passthrough(passthrough_filter, "y", -roi_min, roi_min, is_negative=False)
-
-        # passthrough_filter = right_roi.make_passthrough_filter()
-        # right_roi = self.do_passthrough(passthrough_filter, "y", -roi_min, roi_min, is_negative=False)
-
-        # passthrough_filter = front_roi.make_passthrough_filter()
-        # front_roi = self.do_passthrough(passthrough_filter, "x", -roi_max, roi_max, is_negative=False)
-
-        # passthrough_filter = rear_roi.make_passthrough_filter()
-        # rear_roi = self.do_passthrough(passthrough_filter, "x", -roi_max, roi_max, is_negative=False)
+        rear_roi = self.do_passthrough(passthrough_filter, "x", -roi_max, roi_max, is_negative=False)
 
 
         if front_roi.to_array().size == 0:
@@ -180,7 +148,6 @@ class PCParser:
         ec.set_MinClusterSize(self.params['CLUSTER_MIN_SIZE']) #min number of points
         ec.set_MaxClusterSize(self.params['CLUSTER_MAX_SIZE']) #max number of points
         ec.set_SearchMethod(tree)
-
         cluster_indices = ec.Extract()
         # print(cluster_indices)
         #cluster_color = self.get_color_list(len(cluster_indices))
@@ -220,38 +187,36 @@ class PCParser:
         self.point_pub.publish(out)        
 
     def visualize_cluster(self):
-
         out = PointCloud()
         out.header.frame_id = "map"
-        # channel = ChannelFloat32
-        # channel.name = "intensity"
-        # color = []
+        channel = ChannelFloat32
+        channel.name = "intensity"
+        color = []
         self.cluster_number = len(self.cluster_cloud_list)
         for i, cluster in enumerate(self.cluster_cloud_list):
             color_constant = 1/self.cluster_number 
             for p in cluster:
                 out.points.append(Point32(p[0], p[1], p[2]))
+
                 # out.points.append(Point32(p[0], p[1], p[2]))
-                # color.append(i*color_constant)
-        # channel.values = color
-        # out.channels.append(channel)
+                color.append(i*color_constant)
+        channel.values = color
+        out.channels.append(channel)
         self.cluster_pub.publish(out)        
 
     def cluster_filling(self):
         new_grid_map = np.zeros([self.GRIDS_PER_EDGE, self.GRIDS_PER_EDGE])
         for i, cluster in enumerate(self.cluster_cloud_list):
             hull_cluster = cluster[:, 0:2]
-            # print('cluster', cluster[:, 0:2].shape)
-            # print('hull', hull_cluster.shape)
-            # print('--------------')
+            print('cluster', cluster[:, 0:2].shape)
+            print('hull', hull_cluster.shape)
+            print('--------------')
             for p in hull_cluster:
                 # print(int(p[0]/self.params['VOXEL_SIZE'])L_SIZE']
                 # new_grid_map[int(p[0]/self.params['VOXEL_SIZE'])'])
                 pass
 
-        print(new_grid_map)       
-    def target_publish(self,groups):
-        print(groups)
+        print(new_grid_map)
 
     def run(self):
         while True:
@@ -259,13 +224,11 @@ class PCParser:
             self.roi_cropping(roi_min = self.params['EGO_SIZE'], roi_max = self.params['MAP_SIZE'])
             self.voxelize(self.params['VOXEL_SIZE'])
             self.euclidean_clustering()
-            tracked_points = self.tracker.run()
-            self.target_publish(tracked_points)
-            # self.map.run(groups)
-            # self.visualizer.MAP_show(self.map.LocalMap)
+            self.tracker.run()
             # self.cluster_filling()
             self.visualize_cluster()
             self.visualize("voxel")
+                
 
 
 if __name__ == "__main__":

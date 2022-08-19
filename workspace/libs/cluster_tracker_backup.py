@@ -4,57 +4,30 @@ import numpy as np
 import pcl
 from sensor_msgs.msg import PointCloud
 from geometry_msgs.msg import Point32
-from sensor_msgs.msg import ChannelFloat32
-from std_msgs.msg    import String
 import rospy
+from time import time
 
 class Group:
     id = 0
-
-    ## weight
-    w = 1 - np.exp(-1)
-
     def __init__(self, ref, life):
         Group.id += 1
         self.id = Group.id
         self.life = life
 
-        self.mean_ref = ref
-        self.detect_point = ref
+        self.birth = time()
 
-        self.mean_tar = ref
+        self.asdfasdf = []
+
+        self.reference_point = ref
         self.target_point = ref
-
         self.is_spotted = False
 
-    def update_detect_point(self, new_ref):
-        self.detect_point = new_ref
-
-        ## filtering
-        self.mean_ref = self.ewma(self.mean_ref, self.detect_point)
+    def update_reference_point(self, new_ref):
+        self.reference_point = new_ref
 
     def update_target_point(self, new_target):
         self.target_point = new_target
-        
-        ## filtering
-        self.mean_tar = self.ewma(self.mean_tar, self.target_point)
 
-    ## exponential weighted moving average
-    def ewma(self, mean, point):
-        mr_x = mean[0]
-        mr_y = mean[1]
-        mr_z = mean[2]
-
-        rp_x = point[0]
-        rp_y = point[1]
-        rp_z = point[2]
-
-        mr_x = mr_x * Group.w + rp_x * (1 - Group.w)
-        mr_y = mr_y * Group.w + rp_y * (1 - Group.w)
-        mr_z = mr_z * Group.w + rp_z * (1 - Group.w)
-
-        return mr_x, mr_y, mr_z
-        
     # def __del__(self):
     #     self.death = time()
 
@@ -125,8 +98,8 @@ class ClusterTracker:
             for key, group in self.groups.items():
 
                 ## check distance from reference point
-                dist_x = obs_oldest_point[0]-group.detect_point[0]
-                dist_y = obs_oldest_point[1]-group.detect_point[1]
+                dist_x = obs_oldest_point[0] - group.reference_point[0]
+                dist_y = obs_oldest_point[1] - group.reference_point[1]
                 dist = np.hypot(dist_x, dist_y)
 
                 # print(f"group: {key}", dist)
@@ -134,8 +107,8 @@ class ClusterTracker:
                 ## if new point is far enough to reference point,
                 ## then create new group
                 ## case1. not far enough from reference point 
-                if dist < self.params['MAX_INDIVISUAL_DIST']:
-                    group.update_detect_point(obs_oldest_point)
+                if dist < 4:
+                    group.update_reference_point(obs_oldest_point)
                     group.update_target_point(obs_newest_point)
                     group.is_spotted = True
                     is_needed_new_group = False
@@ -159,7 +132,6 @@ class ClusterTracker:
         for id, group in self.groups.items():
             # print(f"id: {id} and group: {group.is_spotted}")
             # print(f"id: {id} and group life: {group.life}")
-            # print(f"id: {id} and point: {group.target_point}")
 
             ## if once it is spotted, it can alive until it is not 
             ## spotted at all for "self.max_group_life / Hz" (s)
@@ -192,25 +164,14 @@ class ClusterTracker:
 
 
     def vis_target_points(self):
-        group_id = "0"
         out = PointCloud() #ros msg
         out.header.frame_id = "map"
-        channel = ChannelFloat32
-        channel.name = "intensity"
-        color = []
-
-        for key, group in sorted(self.groups.items()):
-            group_id += ", "
-            group_id += key        
+        for group in self.groups.values():
             point = group.target_point
             # print(group.target_point)
-            out.points.append(Point32(point[0], point[1], float(key)))
-            color.append(255 * group.id)
+            out.points.append(Point32(point[0], point[1], point[2]))
+        self.point_pub.publish(out)              
 
-        channel.values = color
-
-        out.channels.append(channel)
-        self.point_pub.publish(out)          
 
     def run(self):
             
@@ -219,7 +180,7 @@ class ClusterTracker:
         self.clustering_in_time()
 
         self.vis_target_points()
-
+            
         return self.groups
 
         # print(len(self.clusters_queue), 'len')
