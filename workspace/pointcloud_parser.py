@@ -17,6 +17,8 @@ import pcl
 import threading
 from scipy.spatial import ConvexHull
 from libs.cluster_tracker import ClusterTracker
+from libs.i_am_map        import Map
+# from libs.visualize_map   import VisualizeMap
 from libs.sig_int_handler import Activate_Signal_Interrupt_Handler
 np.set_printoptions(threshold=sys.maxsize)
 
@@ -37,6 +39,7 @@ class PCParser:
         
         self.point_pub = rospy.Publisher("/processed_cloud", PointCloud, queue_size=1)
         self.cluster_pub = rospy.Publisher("/cluster", PointCloud, queue_size=1)
+        self.vis_target_point_pub = rospy.Publisher("/target_points", PointCloud, queue_size=1)
 
         self.shared = Shared()
         self.pcl_data = pcl.PointCloud()
@@ -49,6 +52,12 @@ class PCParser:
 
         self.GRIDS_PER_EDGE = int(self.params['MAP_SIZE'] // self.params['VOXEL_SIZE'])
         self.grid_map = np.zeros([self.GRIDS_PER_EDGE, self.GRIDS_PER_EDGE])
+
+        ## Our LocalMap
+        self.map = Map()
+
+        ## Visualize LocalMap
+        # self.visualizer = VisualizeMap
 
  
     def ros_to_pcl(self, msg): #in sub thread
@@ -148,6 +157,7 @@ class PCParser:
         ec.set_MinClusterSize(self.params['CLUSTER_MIN_SIZE']) #min number of points
         ec.set_MaxClusterSize(self.params['CLUSTER_MAX_SIZE']) #max number of points
         ec.set_SearchMethod(tree)
+
         cluster_indices = ec.Extract()
         # print(cluster_indices)
         #cluster_color = self.get_color_list(len(cluster_indices))
@@ -187,6 +197,7 @@ class PCParser:
         self.point_pub.publish(out)        
 
     def visualize_cluster(self):
+
         out = PointCloud()
         out.header.frame_id = "map"
         channel = ChannelFloat32
@@ -208,9 +219,9 @@ class PCParser:
         new_grid_map = np.zeros([self.GRIDS_PER_EDGE, self.GRIDS_PER_EDGE])
         for i, cluster in enumerate(self.cluster_cloud_list):
             hull_cluster = cluster[:, 0:2]
-            print('cluster', cluster[:, 0:2].shape)
-            print('hull', hull_cluster.shape)
-            print('--------------')
+            # print('cluster', cluster[:, 0:2].shape)
+            # print('hull', hull_cluster.shape)
+            # print('--------------')
             for p in hull_cluster:
                 # print(int(p[0]/self.params['VOXEL_SIZE'])L_SIZE']
                 # new_grid_map[int(p[0]/self.params['VOXEL_SIZE'])'])
@@ -218,17 +229,37 @@ class PCParser:
 
         print(new_grid_map)
 
+
+    def visualize_point(self, targets):
+        out = PointCloud()
+        out.header.frame_id = "map"
+        channel = ChannelFloat32
+        channel.name = "intensity"
+        color = []
+        targets_number = len(targets)
+        for i, p in enumerate(targets):
+            # print(type(cluster))
+            color_constant = 1/targets_number 
+            out.points.append(Point32(p[0], p[1], p[2]))
+            # out.points.append(Point32(p[0], p[1], p[2]))
+            color.append(i*color_constant)
+        channel.values = color
+        out.channels.append(channel)
+        self.vis_target_point_pub.publish(out)        
+
     def run(self):
         while True:
             self.pcl_data = self.new_pcl_data
             self.roi_cropping(roi_min = self.params['EGO_SIZE'], roi_max = self.params['MAP_SIZE'])
             self.voxelize(self.params['VOXEL_SIZE'])
             self.euclidean_clustering()
-            self.tracker.run()
+            targets = self.tracker.run()
+            self.visualize_point(targets)
+            # self.map.run(groups)
+            # self.visualizer.MAP_show(self.map.LocalMap)
             # self.cluster_filling()
-            self.visualize_cluster()
+            # self.visualize_cluster()
             self.visualize("voxel")
-                
 
 
 if __name__ == "__main__":

@@ -2,8 +2,8 @@
 {
         "dok3":
         {
-            "MAP_SIZE" : 50.0,
-            "VOXEL_SIZE" : 0.2,
+            "MAP_SIZE" : 18.0,
+            "VOXEL_SIZE" : 0.4,
             "EGO_SIZE" : 0.5,
             "CLUSTER_TOLERANCE" : 1,
             "CLUSTER_MIN_SIZE" : 10,
@@ -17,7 +17,7 @@
                 "CLUSTER_TOLERANCE" : 0.5,
                 "CLUSTER_MIN_SIZE" : 2,
                 "CLUSTER_MAX_SIZE" : 15,
-                "MAX_GROUP_LIFE" : 4000      
+                "MAX_GROUP_LIFE" : 600      
             }
  	    },
 
@@ -38,7 +38,8 @@
                 "QUEUE_SIZE" : 15,
                 "CLUSTER_TOLERANCE" : 0.5,
                 "CLUSTER_MIN_SIZE" : 2,
-                "CLUSTER_MAX_SIZE" : 15      
+                "CLUSTER_MAX_SIZE" : 15,
+                "MAX_GROUP_LIFE" : 600        
             }
         }
 

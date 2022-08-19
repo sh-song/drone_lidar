@@ -7,20 +7,58 @@ from geometry_msgs.msg import Point32
 import rospy
 
 class Group:
-    id = -1
+    id = 0
+
+    ## weight
+    w = 1 - np.exp(-1)
+
     def __init__(self, ref, life):
         Group.id += 1
         self.id = Group.id
         self.life = life
 
-        self.reference_point = ref
+        self.mean_ref = ref
+        self.detect_point = ref
+
+        self.mean_tar = ref
         self.target_point = ref
+
         self.is_spotted = False
 
-    def update_reference_point(self, new_ref):
-        self.reference_point = new_ref
+    def update_detect_point(self, new_ref):
+        self.detect_point = new_ref
+
+        ## filtering
+        self.mean_ref = self.ewma(self.mean_ref, self.detect_point)
+
     def update_target_point(self, new_target):
         self.target_point = new_target
+        
+        ## filtering
+        self.mean_tar = self.ewma(self.mean_tar, self.target_point)
+
+    ## exponential weighted moving average
+    def ewma(self, mean, point):
+        mr_x = mean[0]
+        mr_y = mean[1]
+        mr_z = mean[2]
+
+        rp_x = point[0]
+        rp_y = point[1]
+        rp_z = point[2]
+
+        mr_x = mr_x * Group.w + rp_x * (1 - Group.w)
+        mr_y = mr_y * Group.w + rp_y * (1 - Group.w)
+        mr_z = mr_z * Group.w + rp_z * (1 - Group.w)
+
+        return mr_x, mr_y, mr_z
+        
+    # def __del__(self):
+    #     self.death = time()
+
+    #     life_time = self.death - self.birth
+
+    #     print(life_time)
 
 
 class ClusterTracker:
@@ -35,77 +73,110 @@ class ClusterTracker:
 
     def update_data(self):
         current_means_num = len(self.shared.current_means)
-        if len(self.shared.current_means) > 0:
-            if len(self.clusters_queue) >= self.params['QUEUE_SIZE']:
+        current_queue_num = len(self.clusters_queue)
+
+        ## if there is new data from lidar, 
+        ## then update queue for tracking 
+        ## either it was there or it suddenly appears there
+        if current_means_num > 0:
+            if current_queue_num >= self.params['QUEUE_SIZE']:
                 for i in range(current_means_num):
                     self.clusters_queue.pop(0) 
+
             for mean in self.shared.current_means:
                 self.clusters_queue.append(mean)
+        
+        ## if there is no new data from lidar,
+        ## then delete queue because there is nothing
         else:
-            if 0 < len(self.clusters_queue) <= self.params['QUEUE_SIZE']:
+            if current_queue_num > 0:
+            #if 0 < current_queue_num <= self.params['QUEUE_SIZE']:
                 self.clusters_queue.pop(0) 
+
+
     def clustering_in_time(self):
-            pcl_data = pcl.PointCloud()
-            pcl_data.from_list(self.clusters_queue)
-            tree = pcl_data.make_kdtree()
-            ec = pcl_data.make_EuclideanClusterExtraction()
-            ec.set_ClusterTolerance(self.params['CLUSTER_TOLERANCE']) # in meters
-            ec.set_MinClusterSize(self.params['CLUSTER_MIN_SIZE']) #min number of points
-            ec.set_MaxClusterSize(self.params['CLUSTER_MAX_SIZE']) #max number of points
-            ec.set_SearchMethod(tree)
-            cluster_indices = ec.Extract()
-            # print(cluster_indices)
+        pcl_data = pcl.PointCloud()
+        pcl_data.from_list(self.clusters_queue)
+        tree = pcl_data.make_kdtree()
+        ec = pcl_data.make_EuclideanClusterExtraction()
+        ec.set_ClusterTolerance(self.params['CLUSTER_TOLERANCE']) # in meters
+        ec.set_MinClusterSize(self.params['CLUSTER_MIN_SIZE']) #min number of points
+        ec.set_MaxClusterSize(self.params['CLUSTER_MAX_SIZE']) #max number of points
+        ec.set_SearchMethod(tree)
+        cluster_indices = ec.Extract()
 
 
-            for obstacle in cluster_indices:
+        for obstacle in cluster_indices:
                 
-                is_needed_new_group = False
-                obs_oldest_point_index = obstacle[0]
-                obs_oldest_point = pcl_data[obs_oldest_point_index]
+            is_needed_new_group = True
+            obs_oldest_point_index = obstacle[0]
+            obs_oldest_point = pcl_data[obs_oldest_point_index]
 
-                obs_newest_point_index = obstacle[-1]
-                obs_newest_point = pcl_data[obs_newest_point_index]
+            obs_newest_point_index = obstacle[-1]
+            obs_newest_point = pcl_data[obs_newest_point_index]
 
-                #if no group
-                if Group.id == -1:
-                    self.create_new_group(obs_newest_point)
+            #if no group
+            if Group.id == 0:
+                self.create_new_group(obs_newest_point)
+
+            #check existing groups
+            for key, group in self.groups.items():
+
+                ## check distance from reference point
+                dist_x = obs_oldest_point[0]-group.detect_point[0]
+                dist_y = obs_oldest_point[1]-group.detect_point[1]
+                dist = np.hypot(dist_x, dist_y)
+
+                # print(f"group: {key}", dist)
+
+                ## if new point is far enough to reference point,
+                ## then create new group
+                ## case1. not far enough from reference point 
+                if dist < 4:
+                    group.update_detect_point(obs_oldest_point)
+                    group.update_target_point(obs_newest_point)
+                    group.is_spotted = True
+                    is_needed_new_group = False
+
+                ## case2. far enough from reference point 
                 else:
-                    print('group size',len(self.groups.keys()))
-                    if len(self.groups.keys()) == 0:
-                        is_needed_new_group = True
-                    else:
-                        is_needed_new_group = False
-                #check existing groups
-                for key, group in self.groups.items():
-                    dist = np.hypot((obs_oldest_point[0] - group.reference_point[0]),(obs_oldest_point[1] - group.reference_point[1]))
-                    if dist < 1:
-                    #if np.isclose(obs_oldest_point, group.reference_point).all():
-                        group.update_reference_point(obs_oldest_point)
-                        group.update_target_point(obs_newest_point)
-                        group.is_spotted = True
-                    else:
-                        is_needed_new_group = True
-                        group.is_spotted = False
+                    pass
 
-                if is_needed_new_group:
+            ## if new group is needed create it
+            ## criterion for needness is on, in , at above..??
+            ## 아무튼 위에 있음 
+            if is_needed_new_group:
                     self.create_new_group(obs_newest_point)
+
+        ## for good looking 
+        # print("=====================")
+
+        #check is dead 
+        death_note = []
+
+        for id, group in self.groups.items():
+            # print(f"id: {id} and group: {group.is_spotted}")
+            # print(f"id: {id} and group life: {group.life}")
+            # print(f"id: {id} and point: {group.detect_point}")
+
+            ## if once it is spotted, it can alive until it is not 
+            ## spotted at all for "self.max_group_life / Hz" (s)
+            if group.is_spotted:
+                group.life = self.max_group_life
+
+            else:
+                group.life -=1
                 
-            #check is dead 
-            death_note = []
-            for id, group in self.groups.items():
+            group.is_spotted = False
 
-                print(f"id: {id} and group: {group.life}")
-                if group.is_spotted:
-                    group.life = self.max_group_life
-                else:
+            ## if it lost all its life(not spotted for a while,) 
+            ## it gonna die by death note
+            if group.life < 0:
+                death_note.append(id)
 
-                    group.life -=1
-                    
-                group.is_spotted = False
-                if group.life < 0:
-                    death_note.append(id)
-            for id in death_note:
-                self.delete_group(id)
+        ## excution!!
+        for id in death_note:
+            self.delete_group(id)
 
 
     def create_new_group(self, ref):
@@ -113,25 +184,34 @@ class ClusterTracker:
         
         self.groups[str(new_group.id)] = new_group
 
+
     def delete_group(self, id):
         del(self.groups[id])
+
 
     def vis_target_points(self):
         out = PointCloud() #ros msg
         out.header.frame_id = "map"
-        cnt = 0
         for group in self.groups.values():
             point = group.target_point
+            # print(group.target_point)
             out.points.append(Point32(point[0], point[1], point[2]))
-            cnt +=1
         self.point_pub.publish(out)              
 
-
     def run(self):
-            self.update_data()
-            self.clustering_in_time()
-            self.vis_target_points()
-            # print(len(self.clusters_queue), 'len')
+            
+        self.update_data()
+
+        self.clustering_in_time()
+
+        self.vis_target_points()
+        
+        targets = []
+        for group in self.groups.values():
+            targets.append(group.target_point)
+        return targets
+
+        # print(len(self.clusters_queue), 'len')
 
            
          
