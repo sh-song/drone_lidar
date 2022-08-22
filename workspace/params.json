@@ -25,13 +25,13 @@
 
         "gigacha":
         {
-            "MAP_SIZE" : 20.0,
+            "MAP_SIZE" : 10.0,
             "VOXEL_SIZE" : 0.2,
             "EGO_SIZE" : 0.15,
             "CLUSTER_TOLERANCE" : 1,
             "CLUSTER_MIN_SIZE" : 10,
-            "CLUSTER_MAX_SIZE" : 500,      
-            "VERTICAL_UPPER_ROI" : 2,
+            "CLUSTER_MAX_SIZE" : 100,
+            "VERTICAL_UPPER_ROI" : 1,
             "VERTICAL_LOWER_ROI" : -0.3,
 
             "tracker":
@@ -41,9 +41,8 @@
                 "CLUSTER_TOLERANCE" : 0.5,
                 "CLUSTER_MIN_SIZE" : 2,
                 "CLUSTER_MAX_SIZE" : 15,
-                "MAX_GROUP_LIFE" : 1000
+                "MAX_GROUP_LIFE" : 100,
+		"TARGET_SPEED" : 5
             }
         }
-
 }
-
