@@ -56,13 +56,6 @@ class Group:
 
         return mr_x, mr_y, mr_z
         
-    # def __del__(self):
-    #     self.death = time()
-
-    #     life_time = self.death - self.birth
-
-    #     print(life_time)
-
 
 class ClusterTracker:
     def __init__(self, params, shared):

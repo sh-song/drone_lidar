@@ -221,18 +221,11 @@ class PCParser:
 
         out = PointCloud()
         out.header.frame_id = "map"
-        # channel = ChannelFloat32
-        # channel.name = "intensity"
-        # color = []
         self.cluster_number = len(self.cluster_cloud_list)
         for i, cluster in enumerate(self.cluster_cloud_list):
             color_constant = 1/self.cluster_number 
             for p in cluster:
                 out.points.append(Point32(p[0], p[1], p[2]))
-                # out.points.append(Point32(p[0], p[1], p[2]))
-                # color.append(i*color_constant)
-        # channel.values = color
-        # out.channels.append(channel)
         self.cluster_pub.publish(out)        
 
     def target_publish(self,groups):
@@ -241,16 +234,14 @@ class PCParser:
         
     def run(self):
         while not rospy.is_shutdown():
-            #Update
+            #Update Data
             self.pcl_data = self.new_pcl_data
+
             if self.target_waypoint == "2":
                 self.params = self.platform_params['pillars']
             else:
                 self.params = self.platform_params['building']
 
-                
-
-            ##TODO update params as target_waypoint
 
             #Preprocessing
             self.roi_cropping(roi_min = self.params['EGO_SIZE'], roi_max = self.params['MAP_SIZE'])
