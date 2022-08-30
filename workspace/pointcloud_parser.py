@@ -32,7 +32,8 @@ class PCParser:
     def __init__(self, args, params):
         print('init..... if using simulator, add "--lidar simul" argument')
         rospy.init_node('parser', anonymous=False)
-        self.params = params
+        self.platform_params = params
+        self.params = self.platform_params['building']
 
         if args.lidar == 'simul':
             rospy.Subscriber("/lidar3D", PointCloud2, self.ros_to_pcl)
@@ -234,7 +235,6 @@ class PCParser:
         # out.channels.append(channel)
         self.cluster_pub.publish(out)        
 
-        print(new_grid_map)       
     def target_publish(self,groups):
         print(groups)
 
@@ -243,22 +243,22 @@ class PCParser:
             #Update
             self.pcl_data = self.new_pcl_data
             if self.target_waypoint == "2":
-                params = self.params['pillars']
+                self.params = self.platform_params['pillars']
             else:
-                params = self.params['building']
+                self.params = self.platform_params['building']
 
                 
 
             ##TODO update params as target_waypoint
 
             #Preprocessing
-            self.roi_cropping(roi_min = params['EGO_SIZE'], roi_max = params['MAP_SIZE'])
-            self.voxelize(params['VOXEL_SIZE'])
+            self.roi_cropping(roi_min = self.params['EGO_SIZE'], roi_max = self.params['MAP_SIZE'])
+            self.voxelize(self.params['VOXEL_SIZE'])
 
             #Clustering
             self.euclidean_clustering()
             #Tracking
-            self.tracker.set_params(params['tracker'])
+            self.tracker.set_params(self.params['tracker'])
             tracked_points = self.tracker.run()
             self.target_publish(tracked_points)
             self.visualize_cluster()
