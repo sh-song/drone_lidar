@@ -29,12 +29,12 @@ class Shared:
         self.current_means = None
 
 class PCParser:
-    def __init__(self, args, params):
+    def __init__(self, args, params, hz):
         print('init..... if using simulator, add "--lidar simul" argument')
         rospy.init_node('parser', anonymous=False)
         self.platform_params = params
         self.params = self.platform_params['building']
-
+        self.rate = rospy.Rate(hz)
         if args.lidar == 'simul':
             rospy.Subscriber("/lidar3D", PointCloud2, self.ros_to_pcl)
         else:
@@ -238,8 +238,9 @@ class PCParser:
     def target_publish(self,groups):
         print(groups)
 
+        
     def run(self):
-        while True:
+        while not rospy.is_shutdown():
             #Update
             self.pcl_data = self.new_pcl_data
             if self.target_waypoint == "2":
@@ -264,7 +265,7 @@ class PCParser:
             self.visualize_cluster()
             self.visualize("voxel")
 
-
+            self.rate.sleep()
 if __name__ == "__main__":
     Activate_Signal_Interrupt_Handler()
 
@@ -298,5 +299,5 @@ if __name__ == "__main__":
         params = params['dok3']
         print('platform: dok3')
 
-    pp = PCParser(args, params)
+    pp = PCParser(args, params, hz=20)
     pp.run()
