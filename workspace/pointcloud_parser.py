@@ -12,6 +12,7 @@ from sensor_msgs import point_cloud2 as pc2
 from sensor_msgs.msg import PointCloud
 from geometry_msgs.msg import Point32
 from sensor_msgs.msg import ChannelFloat32
+from std_msgs.msg import String
 import struct
 import argparse
 import pcl
@@ -50,14 +51,9 @@ class PCParser:
         self.cluster_cloud_list = None
         self.tracker = ClusterTracker(self.params['tracker'], self.shared)
 
-        self.GRIDS_PER_EDGE = int(self.params['MAP_SIZE'] // self.params['VOXEL_SIZE'])
-        self.grid_map = np.zeros([self.GRIDS_PER_EDGE, self.GRIDS_PER_EDGE])
-
-        ## Our LocalMap
-        self.map = Map()
-
-        ## Visualize LocalMap
-        # self.visualizer = VisualizeMap
+			
+        self.target_waypoint = "-1"
+        rospy.Subscriber("/target_waypoint", String, self.waypoint_cb)
 
  
     def ros_to_pcl(self, msg): #in sub thread
@@ -68,7 +64,8 @@ class PCParser:
         self.new_pcl_data = pcl.PointCloud()
         self.new_pcl_data.from_list(points_list)
         #print('callback', time.time())
-
+    def waypoint_cb(self, msg):
+        self.target_waypoint = msg.data
     # ROI
     def do_passthrough(self, passthrough_filter, filter_axis="x", roi_min=0.5, roi_max=15.0, is_negative=False):
         
@@ -237,33 +234,33 @@ class PCParser:
         # out.channels.append(channel)
         self.cluster_pub.publish(out)        
 
-    def cluster_filling(self):
-        new_grid_map = np.zeros([self.GRIDS_PER_EDGE, self.GRIDS_PER_EDGE])
-        for i, cluster in enumerate(self.cluster_cloud_list):
-            hull_cluster = cluster[:, 0:2]
-            # print('cluster', cluster[:, 0:2].shape)
-            # print('hull', hull_cluster.shape)
-            # print('--------------')
-            for p in hull_cluster:
-                # print(int(p[0]/self.params['VOXEL_SIZE'])L_SIZE']
-                # new_grid_map[int(p[0]/self.params['VOXEL_SIZE'])'])
-                pass
-
         print(new_grid_map)       
     def target_publish(self,groups):
         print(groups)
 
     def run(self):
         while True:
+            #Update
             self.pcl_data = self.new_pcl_data
-            self.roi_cropping(roi_min = self.params['EGO_SIZE'], roi_max = self.params['MAP_SIZE'])
-            self.voxelize(self.params['VOXEL_SIZE'])
+            if self.target_waypoint == "2":
+                params = self.params['pillars']
+            else:
+                params = self.params['building']
+
+                
+
+            ##TODO update params as target_waypoint
+
+            #Preprocessing
+            self.roi_cropping(roi_min = params['EGO_SIZE'], roi_max = params['MAP_SIZE'])
+            self.voxelize(params['VOXEL_SIZE'])
+
+            #Clustering
             self.euclidean_clustering()
+            #Tracking
+            self.tracker.set_params(params['tracker'])
             tracked_points = self.tracker.run()
             self.target_publish(tracked_points)
-            # self.map.run(groups)
-            # self.visualizer.MAP_show(self.map.LocalMap)
-            # self.cluster_filling()
             self.visualize_cluster()
             self.visualize("voxel")
 

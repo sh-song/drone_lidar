@@ -8,6 +8,7 @@ from sensor_msgs.msg import ChannelFloat32
 from std_msgs.msg    import String
 import rospy
 
+
 class Group:
     id = 0
 
@@ -65,13 +66,15 @@ class Group:
 
 class ClusterTracker:
     def __init__(self, params, shared):
-        self.params = params
+        self.params = None
+        self.set_params(params)
         self.shared = shared
         self.clusters_queue = [[-2, -2, -2]] 
         self.groups = {}
-    
-        self.max_group_life = self.params['MAX_GROUP_LIFE'] 
         self.point_pub = rospy.Publisher("/target_points", PointCloud, queue_size=1)
+
+    def set_params(self, params):
+        self.params = params
 
     def update_data(self):
         current_means_num = len(self.shared.current_means)
@@ -164,7 +167,7 @@ class ClusterTracker:
             ## if once it is spotted, it can alive until it is not 
             ## spotted at all for "self.max_group_life / Hz" (s)
             if group.is_spotted:
-                group.life = self.max_group_life
+                group.life = self.params["MAX_GROUP_LIFE"]
 
             else:
                 group.life -=1
@@ -180,9 +183,8 @@ class ClusterTracker:
         for id in death_note:
             self.delete_group(id)
 
-
     def create_new_group(self, ref):
-        new_group = Group(ref, self.max_group_life)
+        new_group = Group(ref, self.params["MAX_GROUP_LIFE"])
         
         self.groups[str(new_group.id)] = new_group
 
