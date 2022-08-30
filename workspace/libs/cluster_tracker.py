@@ -28,6 +28,8 @@ class Group:
 
         self.is_spotted = False
 
+        self.highest_point_z = -1
+
     def update_detect_point(self, new_ref):
         self.detect_point = new_ref
 
@@ -55,8 +57,10 @@ class Group:
         mr_z = mr_z * Group.w + rp_z * (1 - Group.w)
 
         return mr_x, mr_y, mr_z
-        
 
+    def get_highest_point(self, cluster):
+        for p in cluster:
+            pass
 class ClusterTracker:
     def __init__(self, params, shared):
         self.params = None
@@ -73,19 +77,17 @@ class ClusterTracker:
         current_means_num = len(self.shared.current_means)
         current_queue_num = len(self.clusters_queue)
 
-        ## if there is new data from lidar, 
-        ## then update queue for tracking 
-        ## either it was there or it suddenly appears there
         if current_means_num > 0:
             if current_queue_num >= self.params['QUEUE_SIZE']:
                 for i in range(current_means_num):
                     self.clusters_queue.pop(0) 
 
-            for mean in self.shared.current_means:
+            #### z == highest point
+            for j, mean in enumerate(self.shared.current_means):
+                mean[2] = self.shared.highest_point_list[j]
                 self.clusters_queue.append(mean)
+            ####
         
-        ## if there is no new data from lidar,
-        ## then delete queue because there is nothing
         else:
             if current_queue_num > 0:
             #if 0 < current_queue_num <= self.params['QUEUE_SIZE']:
@@ -125,31 +127,18 @@ class ClusterTracker:
                 dist_y = obs_oldest_point[1]-group.detect_point[1]
                 dist = np.hypot(dist_x, dist_y)
 
-                # print(f"group: {key}", dist)
-
-                ## if new point is far enough to reference point,
-                ## then create new group
-                ## case1. not far enough from reference point 
                 if dist < self.params['MAX_INDIVISUAL_DIST']:
                     group.update_detect_point(obs_oldest_point)
                     group.update_target_point(obs_newest_point)
                     group.is_spotted = True
                     is_needed_new_group = False
 
-                ## case2. far enough from reference point 
                 else:
                     pass
 
-            ## if new group is needed create it
-            ## criterion for needness is on, in , at above..??
-            ## 아무튼 위에 있음 
             if is_needed_new_group:
-                    self.create_new_group(obs_newest_point)
+                self.create_new_group(obs_newest_point)
 
-        ## for good looking 
-        # print("=====================")
-
-        #check is dead 
         death_note = []
 
         for id, group in self.groups.items():
@@ -157,8 +146,6 @@ class ClusterTracker:
             # print(f"id: {id} and group life: {group.life}")
             # print(f"id: {id} and point: {group.target_point}")
 
-            ## if once it is spotted, it can alive until it is not 
-            ## spotted at all for "self.max_group_life / Hz" (s)
             if group.is_spotted:
                 group.life = self.params["MAX_GROUP_LIFE"]
 
@@ -167,12 +154,9 @@ class ClusterTracker:
                 
             group.is_spotted = False
 
-            ## if it lost all its life(not spotted for a while,) 
-            ## it gonna die by death note
             if group.life < 0:
                 death_note.append(id)
 
-        ## excution!!
         for id in death_note:
             self.delete_group(id)
 
@@ -184,7 +168,6 @@ class ClusterTracker:
 
     def delete_group(self, id):
         del(self.groups[id])
-
 
     def vis_target_points(self):
         group_id = "0"
@@ -199,7 +182,7 @@ class ClusterTracker:
             group_id += key        
             point = group.target_point
             # print(group.target_point)
-            out.points.append(Point32(point[0], point[1], float(key)))
+            out.points.append(Point32(point[0], point[1], point[2]))
             color.append(255 * group.id)
 
         channel.values = color
@@ -208,16 +191,10 @@ class ClusterTracker:
         self.point_pub.publish(out)          
 
     def run(self):
-            
         self.update_data()
-
         self.clustering_in_time()
-
         self.vis_target_points()
-
         return self.groups
-
-        # print(len(self.clusters_queue), 'len')
 
            
          

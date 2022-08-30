@@ -27,6 +27,8 @@ np.set_printoptions(threshold=sys.maxsize)
 class Shared:
     def __init__(self):
         self.current_means = None
+        self.cluster_cloud_list = None
+        self.highest_point_list = None
 
 class PCParser:
     def __init__(self, args, params, hz):
@@ -49,7 +51,6 @@ class PCParser:
         self.voxelized_data = None
         self.roi_cropped_data = pcl.PointCloud()
         
-        self.cluster_cloud_list = None
         self.tracker = ClusterTracker(self.params['tracker'], self.shared)
 
 			
@@ -91,9 +92,6 @@ class PCParser:
         left_roi = self.do_passthrough(passthrough_filter, "x", 0, 0, is_negative=True)
         right_roi = self.do_passthrough(passthrough_filter, "x", roi_min, roi_max, is_negative=False)
 
-        # passthrough_filter = left_roi.make_passthrough_filter()
-        # left_roi = self.do_passthrough(passthrough_filter, "y", -roi_min, roi_min, is_negative=False)
-
         passthrough_filter = right_roi.make_passthrough_filter()
         right_roi = self.do_passthrough(passthrough_filter, "y", -roi_max, roi_max, is_negative=False)
 
@@ -102,29 +100,6 @@ class PCParser:
 
         passthrough_filter = rear_roi.make_passthrough_filter()
         rear_roi = self.do_passthrough(passthrough_filter, "x", 0, roi_min, is_negative=False)
-
-        # ## original code
-        # passthrough_filter = self.pcl_data.make_passthrough_filter()
-        # vertical_roi = self.do_passthrough(passthrough_filter, "z", self.params['VERTICAL_LOWER_ROI'], self.params['VERTICAL_UPPER_ROI'], is_negative=False)
-
-        # passthrough_filter = vertical_roi.make_passthrough_filter()
-        # front_roi = self.do_passthrough(passthrough_filter, "y", roi_min, roi_max, is_negative=False)
-        # rear_roi = self.do_passthrough(passthrough_filter, "y", roi_min, roi_max, is_negative=True)
-
-        # left_roi = self.do_passthrough(passthrough_filter, "x", roi_min, roi_max, is_negative=True)
-        # right_roi = self.do_passthrough(passthrough_filter, "x", roi_min, roi_max, is_negative=False)
-
-        # passthrough_filter = left_roi.make_passthrough_filter()
-        # left_roi = self.do_passthrough(passthrough_filter, "y", -roi_min, roi_min, is_negative=False)
-
-        # passthrough_filter = right_roi.make_passthrough_filter()
-        # right_roi = self.do_passthrough(passthrough_filter, "y", -roi_min, roi_min, is_negative=False)
-
-        # passthrough_filter = front_roi.make_passthrough_filter()
-        # front_roi = self.do_passthrough(passthrough_filter, "x", -roi_max, roi_max, is_negative=False)
-
-        # passthrough_filter = rear_roi.make_passthrough_filter()
-        # rear_roi = self.do_passthrough(passthrough_filter, "x", -roi_max, roi_max, is_negative=False)
 
 
         if front_roi.to_array().size == 0:
@@ -184,7 +159,7 @@ class PCParser:
         #cluster_color = self.get_color_list(len(cluster_indices))
         cluster_cloud_list = []
         current_means = []
-
+        highest_point_list = []
         for j, indices in enumerate(cluster_indices): #jth cluster
             cluster_with_color = []
             for i, indice in enumerate(indices):
@@ -194,13 +169,17 @@ class PCParser:
                                                 self.rgb_to_float([255,0,0])])
 
             cluster_cloud = np.array(cluster_with_color)
+            cluster_cloud_list.append(cluster_cloud)
 
             mean = np.mean(cluster_cloud, axis=0)
-
-            cluster_cloud_list.append(cluster_cloud)
             current_means.append(mean[0:3])
-        self.cluster_cloud_list = cluster_cloud_list
+
+            highest_point = np.max(cluster_cloud[:,2])
+            highest_point_list.append(highest_point)
+
+        self.shared.cluster_cloud_list = cluster_cloud_list
         self.shared.current_means = current_means
+        self.shared.highest_point_list = highest_point_list
 
 
     def visualize(self, target, data=None):
@@ -221,8 +200,8 @@ class PCParser:
 
         out = PointCloud()
         out.header.frame_id = "map"
-        self.cluster_number = len(self.cluster_cloud_list)
-        for i, cluster in enumerate(self.cluster_cloud_list):
+        self.cluster_number = len(self.shared.cluster_cloud_list)
+        for i, cluster in enumerate(self.shared.cluster_cloud_list):
             color_constant = 1/self.cluster_number 
             for p in cluster:
                 out.points.append(Point32(p[0], p[1], p[2]))
