@@ -19,8 +19,6 @@ import pcl
 import threading
 from scipy.spatial import ConvexHull
 from libs.cluster_tracker import ClusterTracker
-from libs.i_am_map        import Map
-# from libs.visualize_map   import VisualizeMap
 from libs.sig_int_handler import Activate_Signal_Interrupt_Handler
 np.set_printoptions(threshold=sys.maxsize)
 
