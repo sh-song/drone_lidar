@@ -7,5 +7,9 @@ for gigacha
 
 to run lidar in simul,
 
+for dok3,
+#TODO
+
+
 $docker exec -it {container name} bash
 $./simul_ros
