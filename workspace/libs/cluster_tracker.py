@@ -78,7 +78,7 @@ class ClusterTracker:
         current_queue_num = len(self.clusters_queue)
 
         if current_means_num > 0:
-            if current_queue_num >= self.params['QUEUE_SIZE']:
+            if current_queue_num > self.params['QUEUE_SIZE']:
                 for i in range(current_means_num):
                     self.clusters_queue.pop(0) 
 
