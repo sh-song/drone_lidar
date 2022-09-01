@@ -33,7 +33,7 @@ class PCParser:
         print('init..... if using simulator, add "--lidar simul" argument')
         rospy.init_node('parser', anonymous=False)
         self.platform_params = params
-        self.params = self.platform_params['building']
+        self.params = self.platform_params['pillars']
         self.rate = rospy.Rate(hz)
         if args.lidar == 'simul':
             rospy.Subscriber("/lidar3D", PointCloud2, self.ros_to_pcl)
@@ -214,11 +214,10 @@ class PCParser:
             #Update Data
             self.pcl_data = self.new_pcl_data
 
-            if self.target_waypoint == "2":
-                self.params = self.platform_params['pillars']
-            else:
+            if self.target_waypoint == "7" or self.target_waypoint == "8" or self.target_waypoint == "9":
                 self.params = self.platform_params['building']
-
+            else:
+                self.params = self.platform_params['pillars']
 
             #Preprocessing
             self.roi_cropping(roi_min = self.params['EGO_SIZE'], roi_max = self.params['MAP_SIZE'])

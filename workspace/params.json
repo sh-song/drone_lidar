@@ -21,30 +21,30 @@
 			"CLUSTER_TOLERANCE" : 0.5,
 			"CLUSTER_MIN_SIZE" : 2,
 			"CLUSTER_MAX_SIZE" : 15,
-			"MAX_GROUP_LIFE" : 1000      
+			"MAX_GROUP_LIFE" : 30      
 		    }
  
             },
 
             "building":
             {
-		    "MAP_SIZE" : 18.0,
+		    "MAP_SIZE" : 15.0,
 		    "VOXEL_SIZE" : 0.4,
 		    "EGO_SIZE" : 0.5,
 		    "CLUSTER_TOLERANCE" : 1,
-		    "CLUSTER_MIN_SIZE" : 10,
+		    "CLUSTER_MIN_SIZE" : 20,
 		    "CLUSTER_MAX_SIZE" : 500,      
-		    "VERTICAL_UPPER_ROI" : 5,
-		    "VERTICAL_LOWER_ROI" : -5,
+		    "VERTICAL_UPPER_ROI" : 2,
+		    "VERTICAL_LOWER_ROI" : -2,
 
 		    "tracker":
 		    {
-			"MAX_INDIVISUAL_DIST" : 4,
+			"MAX_INDIVISUAL_DIST" : 5,
 			"QUEUE_SIZE" : 15,
 			"CLUSTER_TOLERANCE" : 0.5,
 			"CLUSTER_MIN_SIZE" : 2,
 			"CLUSTER_MAX_SIZE" : 15,
-			"MAX_GROUP_LIFE" : 600      
+			"MAX_GROUP_LIFE" : 30      
 		    }
  
             }
