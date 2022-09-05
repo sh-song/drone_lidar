@@ -1,4 +1,4 @@
-# drone_lidar
+# obstacle-tracker
 for gigacha
 1. ./docker_build.sh
 2. ./run.sh
