@@ -1,2 +1,2 @@
 #!/bin/bash
-python3 pointcloud_parser.py --lidar real --platform gigacha
+python3 pointcloud_parser.py --lidar fusion --platform gigacha

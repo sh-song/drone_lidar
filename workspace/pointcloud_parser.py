@@ -6,7 +6,7 @@ from types import DynamicClassAttribute
 import rospy
 import numpy as np
 import sys
-from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import PointCloud2, PointCloud
 import time
 from sensor_msgs import point_cloud2 as pc2
 from sensor_msgs.msg import PointCloud
@@ -37,8 +37,10 @@ class PCParser:
         self.rate = rospy.Rate(hz)
         if args.lidar == 'simul':
             rospy.Subscriber("/lidar3D", PointCloud2, self.ros_to_pcl)
-        else:
+        elif args.lidar == 'real':       
             rospy.Subscriber("/velodyne_points", PointCloud2, self.ros_to_pcl)
+        elif args.lidar == 'fusion':
+            rospy.Subscriber("/pcd", PointCloud, self.fusion_cb)     
         
         self.point_pub = rospy.Publisher("/processed_cloud", PointCloud, queue_size=1)
         self.cluster_pub = rospy.Publisher("/cluster", PointCloud, queue_size=1)
@@ -55,7 +57,16 @@ class PCParser:
         self.target_waypoint = "-1"
         rospy.Subscriber("/target_waypoint", String, self.waypoint_cb)
 
- 
+    def fusion_cb(self, msg):
+        targets = []
+        
+        for p in msg.points:
+            targets.append([p.x, p.y])
+        for j, id in enumerate(msg.channels):
+            targets[j].append(id.values[0])
+
+        self.shared.current_means = targets
+
     def ros_to_pcl(self, msg): #in sub thread
         points_list = []
         for data in pc2.read_points(msg, skip_nans=True):
@@ -212,7 +223,7 @@ class PCParser:
     def run(self):
         while not rospy.is_shutdown():
             #Update Data
-            self.pcl_data = self.new_pcl_data
+            #self.pcl_data = self.new_pcl_data
 
             if self.target_waypoint == "7" or self.target_waypoint == "8" or self.target_waypoint == "9":
                 self.params = self.platform_params['building']
@@ -220,11 +231,12 @@ class PCParser:
                 self.params = self.platform_params['pillars']
 
             #Preprocessing
-            self.roi_cropping(roi_min = self.params['EGO_SIZE'], roi_max = self.params['MAP_SIZE'])
-            self.voxelize(self.params['VOXEL_SIZE'])
+            #self.roi_cropping(roi_min = self.params['EGO_SIZE'], roi_max = self.params['MAP_SIZE'])
+            #self.voxelize(self.params['VOXEL_SIZE'])
 
             #Clustering
-            self.euclidean_clustering()
+            #self.euclidean_clustering()
+            
             #Tracking
             self.tracker.set_params(self.params['tracker'])
             tracked_points = self.tracker.run()

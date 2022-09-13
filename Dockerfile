@@ -30,4 +30,4 @@ RUN apt install -y ros-melodic-rosbridge-server
 RUN mkdir /workspace
 	
 WORKDIR /workspace
-RUN echo "sh dok3_real.sh" >> ~/.bashrc
+RUN echo "./gigacha_real.sh" >> ~/.bashrc
